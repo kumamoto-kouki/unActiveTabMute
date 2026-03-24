@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "unActiveTabMute",
+  "version": "1.0.0",
+  "description": "Automatically mutes audio on all inactive tabs. Only the active tab in the focused window plays audio.",
+  "permissions": [
+    "tabs",
+    "windows",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "unActiveTabMute"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "minimum_chrome_version": "112"
+}
