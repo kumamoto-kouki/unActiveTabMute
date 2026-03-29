@@ -119,8 +119,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// ページの右クリックメニューからミュートをトグルする
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'toggle-mute' || !tab?.id) return;
+  const current = await chrome.tabs.get(tab.id);
+  chrome.tabs.update(tab.id, { muted: !current.mutedInfo?.muted });
+});
+
 // 拡張機能インストール・更新時の初期化
 chrome.runtime.onInstalled.addListener(async () => {
+  chrome.contextMenus.create({
+    id: 'toggle-mute',
+    title: 'ミュートのオン/オフ',
+    contexts: ['page'],
+  });
   const { enabled = true } = await chrome.storage.local.get('enabled');
   updateActionIcon(enabled);
   updateAllTabsMuteState();
