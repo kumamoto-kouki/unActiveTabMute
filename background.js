@@ -6,33 +6,10 @@
  * ミュート判定ルール（有効時）:
  *   - フォーカスされているウィンドウのアクティブタブ → アンミュート
  *   - それ以外の全タブ → ミュート
- *   - ユーザーがスピーカーアイコンで手動操作したタブ → 自動制御から除外
  *
  * ON/OFFトグル: 拡張機能アイコンをクリックで切り替え
  * 無効時は全タブをアンミュートし、以降のイベントでは何もしない
  */
-
-/**
- * ユーザーがスピーカーアイコンで手動ミュート/アンミュートしたタブのID集合
- * このセットに含まれるタブは自動ミュート制御をスキップする
- * 拡張機能をON切り替え時にリセット、タブ削除時にエントリをクリーンアップ
- */
-const manualOverrideTabs = new Set();
-
-/**
- * 拡張機能が chrome.tabs.update でミュート状態を変更する予定のタブID集合
- * tabs.onUpdated 発火時に「拡張機能自身の変更か、ユーザーの手動操作か」を区別するために使う
- */
-const pendingExtensionMuteUpdates = new Set();
-
-/**
- * 拡張機能としてタブのミュート状態を変更する
- * 変更前に pendingExtensionMuteUpdates へ登録することで、onUpdated で拡張機能の変更と識別できる
- */
-function setTabMuted(tabId, muted) {
-  pendingExtensionMuteUpdates.add(tabId);
-  return chrome.tabs.update(tabId, { muted });
-}
 
 /** chrome.storage.local から enabled 状態を取得する（デフォルト: true） */
 async function isEnabled() {
@@ -73,10 +50,9 @@ async function updateAllTabsMuteState() {
   const updates = allTabs
     .filter((tab) => tab.id !== undefined)
     .map((tab) => {
-      if (manualOverrideTabs.has(tab.id)) return Promise.resolve();
       const shouldMute = !(tab.active && tab.windowId === focusedWindowId);
       if (tab.mutedInfo?.muted !== shouldMute) {
-        return setTabMuted(tab.id, shouldMute);
+        return chrome.tabs.update(tab.id, { muted: shouldMute });
       }
       return Promise.resolve();
     });
@@ -93,8 +69,7 @@ async function muteAllTabs() {
   const allTabs = await chrome.tabs.query({});
   const updates = allTabs
     .filter((tab) => tab.id !== undefined && tab.mutedInfo?.muted !== true)
-    .filter((tab) => !manualOverrideTabs.has(tab.id))
-    .map((tab) => setTabMuted(tab.id, true));
+    .map((tab) => chrome.tabs.update(tab.id, { muted: true }));
   await Promise.all(updates);
 }
 
@@ -105,7 +80,7 @@ async function unmuteAllTabs() {
   const allTabs = await chrome.tabs.query({});
   const updates = allTabs
     .filter((tab) => tab.id !== undefined && tab.mutedInfo?.muted === true)
-    .map((tab) => setTabMuted(tab.id, false));
+    .map((tab) => chrome.tabs.update(tab.id, { muted: false }));
   await Promise.all(updates);
 }
 
@@ -140,22 +115,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (!enabled) {
     unmuteAllTabs();
   } else {
-    manualOverrideTabs.clear();
     updateAllTabsMuteState();
   }
-});
-
-// ミュート状態の変化を検知し、ユーザーの手動操作を記録する
-// 拡張機能自身の変更（setTabMuted 経由）は pendingExtensionMuteUpdates で識別してスキップする
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (!changeInfo.mutedInfo) return;
-  if (pendingExtensionMuteUpdates.delete(tabId)) return;
-  manualOverrideTabs.add(tabId);
-});
-
-// タブ削除時にセットからクリーンアップ（メモリリーク防止）
-chrome.tabs.onRemoved.addListener((tabId) => {
-  manualOverrideTabs.delete(tabId);
 });
 
 // 拡張機能インストール・更新時の初期化
